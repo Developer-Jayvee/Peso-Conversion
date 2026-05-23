@@ -4,7 +4,7 @@
 
 Run the following commands:
 
-```bash
+```sh
 composer install
 
 cp .env.example .env
@@ -15,7 +15,7 @@ php artisan migrate:fresh
 ## Run the Project
 
 ### Start the Laravel server:
-```bash
+```sh
 php artisan serve
 ```
 
