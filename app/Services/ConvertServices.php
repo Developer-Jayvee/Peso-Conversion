@@ -21,6 +21,7 @@ class ConvertServices
 
     protected CurrencyRateAPIService $currencyAPI;
     protected float $rate = 0;
+
     public function __construct() {
         $this->currencyAPI = new CurrencyRateAPIService('https://api.frankfurter.app/latest');
     }
@@ -28,35 +29,42 @@ class ConvertServices
     /**
      * Convert amount/value
      *
-     * @param  mixed $amount
-     * @param  mixed $toString
+     * @param  int | string $amount
+     * @param  bool $toString
      * @return string
      */
     public function convertAmount(int | string $amount ,bool $toString = false) : string | int
     {
         $this->rate = $this->currencyAPI->handler()['USD'] ?: 0;
 
-        if(!$toString) return self::convertToInteger($amount);
-        return self::convertToString($amount);
+        if(!$toString){
+            $lettersOnly = preg_replace('/[^a-zA-Z\s]/', '', $amount);
+            if($lettersOnly == "") throw new \Exception("Invalid string amount.");
+
+            return self::convertToInteger($lettersOnly);
+        }
+
+        $numbersOnly = preg_replace('/[^0-9]/', '', $amount);
+        if($numbersOnly == "") throw new \Exception("Invalid numeric amount");
+
+        return self::convertToString($numbersOnly);
     }
     /**
      * Convert value to string
      *
-     * @param  mixed $amount
+     * @param  string $amount
      * @return string
      */
     private function convertToString(string $amount) : string
     {
         try {
             $amount = str_replace(" ","",$amount);
-            $integerVal = intval($amount * $this->rate);
+            $integerVal = doubleval($amount * $this->rate);
+            $cents = $this->calculateCents($integerVal);
 
-            $cents = explode(".",number_format($amount * $this->rate,2))[1] ?? null;
-            $cents = self::setTeenString(intval($cents)) ?? "";
-            $centString = ($cents ? " And ".$cents." Cents" : "");
-            if($integerVal == 0) return "Zero";
-            if($integerVal < 20) return self::_1_19[$integerVal - 1]." ".($centString);
-            if($integerVal > 19 && $integerVal < 100) return self::setTeenString($integerVal)." ".($centString);
+            if($integerVal == 0) return "Zero Dollar";
+            if($integerVal < 20) return self::_1_19[(string)($integerVal - 1)]." Dollars".($cents);
+            if($integerVal > 19 && $integerVal < 100) return self::setTeenString($integerVal)." Dollars".($cents);
 
             $arr = array_reverse(explode(",",number_format($integerVal)));
             $index = 0;
@@ -64,8 +72,10 @@ class ConvertServices
 
             foreach (self::MULT as $key => $value) {
                 if($key >= strlen((string) $integerVal)) break;
+
                 $numb = intval($arr[$index]);
                 $x = "";
+
                 if($numb == 0){
                     $index++;
                     continue;
@@ -75,27 +85,38 @@ class ConvertServices
                 else if($numb < (10 ** 3))  $x = self::setHundredsString($numb);
 
                 if($key === 2) $conversion = $x;
-                else {
-                    $conversion = $x. " ".$value.($conversion !== "" ? " And ".$conversion : " ");
-                }
+                else $conversion = $x. " ".$value.($conversion !== "" ? " And ".$conversion : " ");
+
                 $index++;
             }
-            return $conversion.($centString);
+            return $conversion." Dollars ".($cents);
         } catch (\Throwable $th) {
+            dd($th);
             throw new \Exception("Amount must be a numerical value only");
 
         }
     }
     /**
+     * Calculate dollar cents
+     *
+     * @param  int $amount
+     * @return string
+     */
+    private function calculateCents(int | float $amount) : string
+    {
+        $cents = explode(".",number_format($amount,2))[1] ?? null;
+        $cents = self::setTeenString(intval($cents)) ?? "";
+        return ($cents ? " And ".$cents." Cents" : "");
+    }
+    /**
      * Convert value to numeric
      *
-     * @param  mixed $amount
+     * @param  string $amount
      * @return string
      */
     private function convertToInteger(string $amount) : string | int
     {
         if($amount == "0") return 0;
-        $amount = (string) $amount;
         $totalInteger = 0;
         $amountArray = explode("|",self::formatStringNumber($amount));
         foreach ($amountArray as $key => $value) {
@@ -103,40 +124,40 @@ class ConvertServices
             $multiTotal = self::getMultiValue($value);
             $totalInteger += $multiTotal;
         }
-        return  number_format($totalInteger * $this->rate , 2);
+        return  "USD ".number_format($totalInteger * $this->rate , 2);
     }
     /**
      * Set integer to hundred string
      *
-     * @param  mixed $value
+     * @param  int | float $value
      * @return string
      */
-    private function setHundredsString(int $value) : string
+    private function setHundredsString(int | float $value) : string
     {
         $n = number_format($value * 0.01,2);
 
         $explodeVal = explode(".",(string) $n);
         $hundred = $explodeVal[0];
         $teen = $explodeVal[1];
-        return self::_1_19[$hundred - 1]." Hundred ".self::setTeenString(intval($teen));
+        return (self::_1_19[$hundred - 1] ?? '')." Hundred ".self::setTeenString(intval($teen));
     }
     /**
      * Set integer to teen string
      *
-     * @param  mixed $value
+     * @param  int | float $value
      * @return string
      */
-    private function setTeenString(int $value) : string
+    private function setTeenString(int | float $value) : string
     {
         if($value <= 0) return "";
         $n = number_format($value * 0.1,1);
         [$x,$y] = explode(".", $n );
-        return self::TEEN[$x]." ".ucwords(self::_1_19[$y - 1] ?? "");
+        return (self::TEEN[$x] ?? '' )." ".ucwords(self::_1_19[$y - 1] ?? "");
     }
     /**
      * Convert value ( Helper )
      *
-     * @param  mixed $value
+     * @param  string $value
      * @return int
      */
     private function searchEquivalent(string $value) : int
@@ -154,7 +175,7 @@ class ConvertServices
     /**
      * Sum of converted values
      *
-     * @param  mixed $amount
+     * @param  string $amount
      * @return int
      */
     private function getMultiValue(string $amount ) : int
@@ -174,14 +195,20 @@ class ConvertServices
     /**
      * Replace "And" into "|"
      *
-     * @param  mixed $value
+     * @param  string $value
      * @return string
      */
     private function formatStringNumber(string $value) : string
     {
         return  trim(preg_replace('/\s+/', ' ',str_replace("And","|",ucwords(strtolower($value)))));
     }
-    private function checkNumberFormat(string $value)
+    /**
+     * Correct word formatting
+     *
+     * @param  mixed $value
+     * @return string
+     */
+    private function checkNumberFormat(string $value) : string
     {
         $_1_19 = implode("|",self::_1_19);
         $teens = implode("|",self::TEEN);

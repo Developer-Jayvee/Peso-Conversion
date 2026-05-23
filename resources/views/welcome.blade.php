@@ -102,7 +102,7 @@
         </form>
         @if(session('amount'))
             <p class="output" style="text-align: center;">
-               USD {{ session('amount') }}
+                {{ session('amount') }}
             </p>
         @endif
     </div>
