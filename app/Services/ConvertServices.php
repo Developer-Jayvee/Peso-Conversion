@@ -82,7 +82,7 @@ class ConvertServices
             }
             return $conversion.($centString);
         } catch (\Throwable $th) {
-            throw new \Exception("Amount must be a numerical value");
+            throw new \Exception("Amount must be a numerical value only");
 
         }
     }
