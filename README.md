@@ -1,4 +1,4 @@
-# pesoConversion_DB
+# Peso-Conversion
 
 ## Setup Instructions
 
